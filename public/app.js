@@ -21,6 +21,7 @@
     judgeFormTitle: $('judgeFormTitle'), judgeId: $('judgeId'), judgeName: $('judgeName'), judgeTone: $('judgeTone'),
     judgeIntro: $('judgeIntro'), judgeError: $('judgeError'), judgeCancel: $('judgeCancel'), judgeSave: $('judgeSave'),
     toast: $('toast'),
+    appealLabel: $('appealLabel'), appealText: $('appealText'), appealCancel: $('appealCancel'),
   };
 
   const state = {
@@ -29,6 +30,7 @@
     caseId: null,          // null = new, not yet saved case
     settings: { ...DEFAULTS, judgeId: null },
     attachment: null,
+    appeal: null,          // { messageId, score } of the verdict being appealed
     busy: false,
   };
 
@@ -370,9 +372,21 @@
     const hallBtn = m.inHall
       ? '<button class="btn btn-secondary btn-sm" disabled>✓ In the Hall</button>'
       : `<button class="btn btn-secondary btn-sm" data-hall="${m.id}">🏆 Submit to Hall</button>`;
+    const appealBtn = `<button class="btn btn-secondary btn-sm" data-appeal="${m.id}">⚖️ Appeal</button>`;
+    const a = m.appeal;
+    const appealBox = a ? `<div class="appeal-box ${esc(a.outcome)}">
+        <div class="meta">Appeal #${a.number} of the original report</div>
+        <div class="appeal-outcome">${esc(d.appealLabel || a.outcome)}</div>
+        <div class="appeal-scores">
+          <div class="appeal-score"><small>Previous</small><strong>${fmtScore(a.previousScore)} / 10</strong></div>
+          <div class="appeal-arrow">→</div>
+          <div class="appeal-score"><small>New</small><strong>${fmtScore(m.score)} / 10</strong></div>
+        </div>
+      </div>` : '';
     return `<div class="msg judge"><div class="bubble">
         <div class="judge-head">⚖️ ${esc(d.judgeName || 'The Court')}</div>
         ${d.judgeIntro ? `<div class="judge-intro">${esc(d.judgeIntro)}</div>` : ''}
+        ${appealBox}
         <div class="score-row">
           <div class="score">${fmtScore(m.score)} <small>/ ${d.maxScore || 10}</small></div>
           <div>
@@ -384,12 +398,13 @@
         ${charges}
         <div class="section-label">Sentence</div>
         <p class="sentence">${esc(d.sentence || m.content)}</p>
+        ${d.tiredMessage ? `<p class="tired">😩 ${esc(d.tiredMessage)}</p>` : ''}
         <details class="fix">
           <summary>How to fix</summary>
           <pre>${esc(d.template || '')}</pre>
           <div class="fix-actions"><button class="btn btn-ghost btn-sm" data-use-template="${m.id}">Use this template</button></div>
         </details>
-        <div class="judge-actions">${hallBtn}</div>
+        <div class="judge-actions">${appealBtn}${hallBtn}</div>
       </div><div class="time">${esc(fmtTime(m.createdAt))}</div></div>`;
   }
 
@@ -407,7 +422,10 @@
   el.chat.addEventListener('click', async (e) => {
     const hall = e.target.closest('[data-hall]');
     const useTpl = e.target.closest('[data-use-template]');
-    if (hall) {
+    const appealBtn = e.target.closest('[data-appeal]');
+    if (appealBtn) {
+      startAppeal(Number(appealBtn.dataset.appeal));
+    } else if (hall) {
       hall.disabled = true;
       try {
         await api('/api/hall', { method: 'POST', body: { messageId: Number(hall.dataset.hall) } });
@@ -428,8 +446,39 @@
     }
   });
 
+  // ---------- Appeals ----------
+  function startAppeal(judgeMessageId) {
+    const msgs = state.messages || [];
+    const idx = msgs.findIndex((x) => x.id === judgeMessageId);
+    if (idx < 0) return;
+    // The report that was judged is the user message right before the verdict.
+    const report = msgs.slice(0, idx).reverse().find((x) => x.role === 'user');
+    if (!report) return;
+    state.appeal = { messageId: judgeMessageId, score: msgs[idx].score };
+    el.input.value = report.content;
+    clearAttachment();
+    if (report.attachmentName) setAttachment(report.attachmentName);
+    renderAppealLabel();
+    onInputChange();
+    el.input.focus();
+    el.input.setSelectionRange(el.input.value.length, el.input.value.length);
+  }
+
+  function cancelAppeal() {
+    state.appeal = null;
+    renderAppealLabel();
+  }
+
+  function renderAppealLabel() {
+    el.appealLabel.hidden = !state.appeal;
+    if (state.appeal) el.appealText.textContent = `Appeal of case verdict ${Number(state.appeal.score).toFixed(1)} / 10`;
+  }
+
+  el.appealCancel.addEventListener('click', () => { cancelAppeal(); el.input.focus(); });
+
   async function openCase(id) {
     showChat();
+    cancelAppeal();
     try {
       const c = await api(`/api/cases/${id}`);
       state.caseId = c.id;
@@ -450,6 +499,7 @@
     state.settings = { ...DEFAULTS, judgeId: state.judges[0] ? state.judges[0].id : null };
     state.messages = [];
     history.replaceState(null, '', location.pathname);
+    cancelAppeal();
     clearInput();
     renderSettingsControls();
     renderEmpty();
@@ -488,14 +538,17 @@
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
   });
 
+  function setAttachment(name) {
+    state.attachment = name;
+    el.fileName.textContent = name;
+    el.fileName.title = name;
+    el.fileChip.hidden = false;
+  }
+
   el.fileInput.addEventListener('change', () => {
     const f = el.fileInput.files[0];
-    if (!f) return;
     // Only the file name is used; the content is never read or uploaded.
-    state.attachment = f.name;
-    el.fileName.textContent = f.name;
-    el.fileName.title = f.name;
-    el.fileChip.hidden = false;
+    if (f) setAttachment(f.name);
   });
   el.fileRemove.addEventListener('click', clearAttachment);
 
@@ -523,6 +576,7 @@
     state.busy = true;
     el.submitBtn.disabled = true;
     const attachmentName = state.attachment;
+    const appeal = state.appeal;
 
     // Optimistic user bubble + deliberating indicator
     if (!state.messages || !state.messages.length) el.chat.innerHTML = '';
@@ -531,6 +585,7 @@
     scrollToBottom();
     const savedInput = el.input.value;
     clearInput();
+    cancelAppeal();
 
     try {
       if (!state.caseId) {
@@ -539,7 +594,10 @@
         history.replaceState(null, '', `#case-${c.id}`);
       }
       const [result] = await Promise.all([
-        api(`/api/cases/${state.caseId}/messages`, { method: 'POST', body: { text, attachmentName } }),
+        api(`/api/cases/${state.caseId}/messages`, {
+          method: 'POST',
+          body: { text, attachmentName, appealOf: appeal ? appeal.messageId : null },
+        }),
         sleep(DELIBERATION_MS),
       ]);
       renderMessages([...(state.messages || []), ...result.messages]);
@@ -548,7 +606,9 @@
       // Restore the report so nothing is lost
       renderMessages(state.messages || []);
       el.input.value = savedInput;
-      if (attachmentName) { state.attachment = attachmentName; el.fileName.textContent = attachmentName; el.fileChip.hidden = false; }
+      if (attachmentName) setAttachment(attachmentName);
+      state.appeal = appeal;
+      renderAppealLabel();
       onInputChange();
       showInputError(err.message);
     } finally {

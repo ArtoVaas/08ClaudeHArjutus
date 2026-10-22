@@ -79,6 +79,21 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    id: 2,
+    name: 'appeals',
+    // Additive only: nullable columns, existing messages keep NULL (= not an appeal).
+    sql: `
+      ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS appeal_of INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS appeal_root INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS appeal_number INTEGER,
+        ADD COLUMN IF NOT EXISTS previous_score NUMERIC(3,1),
+        ADD COLUMN IF NOT EXISTS score_diff NUMERIC(3,1),
+        ADD COLUMN IF NOT EXISTS appeal_outcome TEXT;
+      CREATE INDEX IF NOT EXISTS messages_appeal_root_idx ON messages(appeal_root);
+    `,
+  },
 ];
 
 const DEFAULT_JUDGES = [

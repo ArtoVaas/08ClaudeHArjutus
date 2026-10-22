@@ -4,6 +4,7 @@ const { types } = require('pg');
 const { pool } = require('./db/pool');
 const { migrateAndSeed } = require('./db/migrate');
 const { judgeReport, sarcasmTone, pickSentence, COURTS } = require('./judge/engine');
+const { compareAppeal } = require('./judge/appeal');
 
 // Return NUMERIC columns as JS numbers instead of strings.
 types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
@@ -70,6 +71,14 @@ function mapMessage(r) {
     score: r.score,
     verdict: r.verdict,
     details: r.details,
+    appeal: r.appeal_number ? {
+      appealOf: r.appeal_of,
+      rootId: r.appeal_root,
+      number: r.appeal_number,
+      previousScore: r.previous_score,
+      diff: r.score_diff,
+      outcome: r.appeal_outcome,
+    } : null,
     inHall: Boolean(r.in_hall),
     createdAt: r.created_at,
   };
@@ -212,20 +221,55 @@ app.post('/api/cases/:id/messages', wrap(async (req, res) => {
   if (!c.rowCount) throw new HttpError(404, 'Case not found.');
   const theCase = c.rows[0];
 
-  const j = theCase.judge_id ? await q('SELECT * FROM judges WHERE id = $1', [theCase.judge_id]) : { rows: [] };
-  const judge = j.rows[0] || { name: 'The Court', intro: 'The court is in session.' };
+  // Settings used for judging: the case's current ones, or for an appeal the ones
+  // stored with the appealed verdict (falling back to the case for older verdicts).
+  const settings = {
+    court: theCase.court,
+    judgeId: theCase.judge_id,
+    sarcasm: theCase.sarcasm,
+    strictness: theCase.strictness,
+    tone: null,
+  };
+  let appealed = null;
+  if (body.appealOf !== undefined && body.appealOf !== null) {
+    const a = await q("SELECT * FROM messages WHERE id = $1 AND case_id = $2 AND role = 'judge'", [toId(body.appealOf), id]);
+    if (!a.rowCount) throw new HttpError(404, 'The verdict you are appealing was not found in this case.');
+    appealed = a.rows[0];
+    const d = appealed.details || {};
+    if (COURTS[d.court]) settings.court = d.court;
+    if (d.judgeId !== undefined) settings.judgeId = d.judgeId;
+    if (d.strictness !== undefined) settings.strictness = d.strictness;
+    if (d.sarcasm !== undefined) settings.sarcasm = d.sarcasm;
+    else if (d.tone) settings.tone = d.tone;
+  }
 
-  const result = judgeReport(text, { court: theCase.court, strictness: theCase.strictness, attachmentName });
-  const tone = sarcasmTone(theCase.sarcasm);
+  const j = settings.judgeId ? await q('SELECT * FROM judges WHERE id = $1', [settings.judgeId]) : { rows: [] };
+  const judge = j.rows[0] || { id: null, name: 'The Court', intro: 'The court is in session.' };
+
+  const result = judgeReport(text, { court: settings.court, strictness: settings.strictness, attachmentName });
+  const tone = settings.tone || sarcasmTone(settings.sarcasm);
   const lines = await q('SELECT verdict, tone, line FROM verdict_lines WHERE verdict = $1', [result.verdict.key]);
   const line = pickSentence(lines.rows, result.verdict.key, tone);
   const sentence = [judge.intro, line].filter(Boolean).join(' ');
 
+  let appeal = null;
+  if (appealed) {
+    const rootId = appealed.appeal_root || appealed.id;
+    const prior = await q('SELECT count(*)::int AS n FROM messages WHERE appeal_root = $1', [rootId]);
+    const number = prior.rows[0].n + 1;
+    appeal = { rootId, ...compareAppeal(appealed.score, result.score, number, result.verdict.key) };
+  }
+
   const details = {
+    judgeId: judge.id,
     judgeName: judge.name,
     judgeIntro: judge.intro,
+    sarcasm: settings.tone ? undefined : settings.sarcasm,
+    strictness: settings.strictness,
     tone,
     sentence,
+    appealLabel: appeal ? appeal.label : undefined,
+    tiredMessage: appeal && appeal.tiredMessage ? appeal.tiredMessage : undefined,
     court: result.court,
     courtLabel: result.courtLabel,
     verdict: result.verdict,
@@ -246,8 +290,18 @@ app.post('/api/cases/:id/messages', wrap(async (req, res) => {
       [id, 'user', text, attachmentName]
     );
     const judgeMsg = await client.query(
-      'INSERT INTO messages (case_id, role, content, score, verdict, details) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [id, 'judge', sentence, result.score, result.verdict.key, details]
+      `INSERT INTO messages (case_id, role, content, score, verdict, details,
+         appeal_of, appeal_root, appeal_number, previous_score, score_diff, appeal_outcome)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [
+        id, 'judge', sentence, result.score, result.verdict.key, details,
+        appealed ? appealed.id : null,
+        appeal ? appeal.rootId : null,
+        appeal ? appeal.appealNumber : null,
+        appeal ? appeal.previousScore : null,
+        appeal ? appeal.diff : null,
+        appeal ? appeal.outcome : null,
+      ]
     );
     // Title = first line of the first report.
     const title = text.split('\n')[0].trim().slice(0, 120) || 'Untitled case';

@@ -45,7 +45,7 @@ npm test
 | PUT/DELETE | `/api/judges/:id` | Edit or delete a judge |
 | GET/POST | `/api/cases` | List cases or create a case (court, judgeId, sarcasm, strictness) |
 | GET/PATCH/DELETE | `/api/cases/:id` | Case with its messages, update settings, delete |
-| POST | `/api/cases/:id/messages` | Submit a report `{text, attachmentName}` and get the verdict |
+| POST | `/api/cases/:id/messages` | Submit a report `{text, attachmentName, appealOf?}` and get the verdict |
 | GET | `/api/samples/random` | Random sample report |
 | GET/POST | `/api/hall` | Top 10 / bottom 10, or submit a verdict `{messageId}` |
 
@@ -54,3 +54,14 @@ npm test
 Points (max 10): title 1, steps 2 (1 per step), expected 1.5, actual 1.5, environment 1, severity/priority 1, evidence 1, test data/preconditions 1.
 Penalties: vague phrases −0.5 each (max −2), >30% uppercase −1, `!!!` −0.5, several defects −1. Penalties are multiplied by the Strictness factor (×0.5–×1.5) and then capped at −3. The score never goes below 0.
 Section keywords are recognised in English and Estonian.
+
+## Appeals
+
+Every verdict has an **Appeal** button. It loads the judged report back into the input. The appeal is judged with the court, judge, sarcasm and strictness stored with the appealed verdict. For verdicts made before appeals existed, missing values come from the current case settings. The result is compared with the appealed verdict's score:
+
+- +1.0 or more: `APPEAL GRANTED (+N.N)`
+- between −1.0 and +1.0: `APPEAL DENIED – the court sees no real improvement`
+- −1.0 or more lower: `CONTEMPT OF COURT (-N.N) – you made it worse`
+
+Appeals are counted per original report, and appeals of appeals count toward the same original. From the 3rd appeal on, if the verdict is still below ACQUITTED, the judge adds "The court is tired of you. Request a training session."
+The link and the score difference are stored in nullable columns on `messages` (migration 2: `appeal_of`, `appeal_root`, `appeal_number`, `previous_score`, `score_diff`, `appeal_outcome`). The comparison logic is in `src/judge/appeal.js` and tested in `test/appeal.test.js`.
