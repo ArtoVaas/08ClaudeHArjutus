@@ -1,0 +1,20 @@
+{
+  "name": "bug-report-court",
+  "version": "1.0.0",
+  "description": "Paste a defect report, get a rule-based verdict.",
+  "private": true,
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node --test test/*.test.js",
+    "start": "node src/server.js",
+    "migrate": "node src/db/migrate.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

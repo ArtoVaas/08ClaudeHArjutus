@@ -3,3 +3,10 @@
 
 # Wordi ajutised lukufailid
 ~$*.docx
+
+# Node / env
+node_modules/
+.env
+
+# Local preview config
+.claude/

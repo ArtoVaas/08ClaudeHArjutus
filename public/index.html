@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bug Report Court</title>
+  <meta name="description" content="Paste a defect report and get a verdict from the Bug Report Court.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='18'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="banner" role="note">⚠️ Do not paste confidential client data.</div>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Case Files">
+      <div class="brand">
+        <svg class="gavel" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 2.8l6.7 6.7-2.1 2.1-1.1-1.1-4.2 4.2 1.1 1.1-2.1 2.1-6.7-6.7 2.1-2.1 1.1 1.1 4.2-4.2-1.1-1.1zM9.4 14.6l1.4 1.4-6.4 6.4a1 1 0 01-1.4-1.4zM13 20h9v2h-9z"/></svg>
+        <span>Bug Report Court</span>
+        <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close menu">✕</button>
+      </div>
+      <nav class="side-nav">
+        <button class="side-link" id="hallLink">🏆 Hall of Fame / Shame</button>
+      </nav>
+      <h2 class="side-title">Case Files</h2>
+      <ul class="case-list" id="caseList"></ul>
+      <div class="side-footer">
+        <button class="btn btn-primary btn-block" id="newCaseBtn">＋ New Case</button>
+      </div>
+    </aside>
+    <div class="backdrop" id="backdrop" hidden></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn hamburger" id="hamburger" aria-label="Open Case Files">☰</button>
+        <div class="topbar-controls">
+          <label class="field">
+            <span>Court</span>
+            <select id="courtSelect">
+              <option value="junior">Junior Court (lenient)</option>
+              <option value="district">District Court (normal)</option>
+              <option value="supreme">Supreme Court (strict)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Judge</span>
+            <select id="judgeSelect"></select>
+          </label>
+          <button class="btn btn-ghost" id="manageJudgesBtn">Manage Judges</button>
+          <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">⚙️</button>
+        </div>
+      </header>
+
+      <div class="db-error" id="dbError" hidden></div>
+
+      <section class="view" id="chatView">
+        <div class="chat" id="chat" aria-live="polite"></div>
+      </section>
+
+      <section class="view hall" id="hallView" hidden>
+        <div class="hall-head">
+          <h1>🏆 Hall of Fame / Shame</h1>
+          <button class="btn btn-ghost" id="hallBack">← Back to court</button>
+        </div>
+        <div class="hall-grid">
+          <div>
+            <h2>Hall of Fame <small>top 10</small></h2>
+            <ol class="hall-list" id="hallTop"></ol>
+          </div>
+          <div>
+            <h2>Hall of Shame <small>bottom 10</small></h2>
+            <ol class="hall-list" id="hallBottom"></ol>
+          </div>
+        </div>
+      </section>
+
+      <footer class="composer" id="composer">
+        <div class="input-error" id="inputError" role="alert" hidden></div>
+        <div class="composer-box">
+          <textarea id="reportInput" rows="2" placeholder="Paste your defect report..." aria-label="Defect report"></textarea>
+          <div class="char-count" id="charCount">0 / 5000</div>
+        </div>
+        <div class="composer-actions">
+          <div class="left-actions">
+            <label class="btn btn-ghost attach" title="Attach File">
+              📎 <span>Attach File</span>
+              <input type="file" id="fileInput" hidden>
+            </label>
+            <span class="file-chip" id="fileChip" hidden>
+              <span id="fileName"></span>
+              <button class="chip-x" id="fileRemove" aria-label="Remove attachment">✕</button>
+            </span>
+            <button class="btn btn-ghost" id="sampleBtn">🎲 Try a bad report</button>
+          </div>
+          <div class="right-actions">
+            <button class="btn btn-secondary" id="clearBtn">Clear Case</button>
+            <button class="btn btn-primary" id="submitBtn">Submit to Court</button>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Settings modal -->
+  <dialog class="modal" id="settingsModal">
+    <form method="dialog" class="modal-body">
+      <h2>Settings</h2>
+      <p class="muted">Saved for this case.</p>
+      <label class="slider">
+        <span>Sarcasm <output id="sarcasmVal">0.5</output></span>
+        <input type="range" id="sarcasmRange" min="0" max="1" step="0.1" value="0.5">
+        <small class="muted">0–0.3 polite · 0.4–0.7 dry · 0.8–1.0 savage</small>
+      </label>
+      <label class="slider">
+        <span>Strictness <output id="strictnessVal">0.5</output></span>
+        <input type="range" id="strictnessRange" min="0" max="1" step="0.1" value="0.5">
+        <small class="muted">Penalty multiplier: <span id="multiplierVal">×1.0</span></small>
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-primary" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Manage judges modal -->
+  <dialog class="modal" id="judgesModal">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Manage Judges</h2>
+        <button class="icon-btn" id="judgesClose" aria-label="Close">✕</button>
+      </div>
+      <ul class="judge-list" id="judgeList"></ul>
+      <form class="judge-form" id="judgeForm">
+        <h3 id="judgeFormTitle">Add a judge</h3>
+        <input type="hidden" id="judgeId">
+        <label>Name<input id="judgeName" maxlength="60" required></label>
+        <label>Description of tone<textarea id="judgeTone" maxlength="300" rows="2"></textarea></label>
+        <label>Intro line<textarea id="judgeIntro" maxlength="300" rows="2"></textarea></label>
+        <div class="form-error" id="judgeError" hidden></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="judgeCancel" hidden>Cancel edit</button>
+          <button type="submit" class="btn btn-primary" id="judgeSave">Add judge</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+title,language,quality,report
+Login doesn't work,en,bad,"Login doesn't work!!! fix ASAP"
+EVERYTHING BROKEN,en,bad,"EVERYTHING IS BROKEN AGAIN!!! THE APP DOES NOT WORK. URGENT"
+Checkout problem,en,bad,"Checkout is not working. Also the search is broken and the footer looks weird etc."
+Bug,en,bad,"Bug
+Something wrong on the profile page, please fix."
+Ei tööta,et,bad,"Sisselogimine ei tööta!!! Parandage kiiresti, lisaks veel otsing on katki."
+Makse katki,et,bad,"Makse katki
+Proovisin maksta ja midagi juhtus."
+Search returns no results,en,medium,"Search returns no results for existing products
+Steps:
+1. Open the home page
+2. Type 'shoes' into search
+Expected: List of shoes
+Actual: 'No results' message"
+Arve PDF on tühi,et,medium,"Arve PDF on tühi
+Sammud:
+1. Ava Minu tellimused
+2. Vajuta Laadi arve alla
+Oodatud: PDF sisaldab tellimuse ridu
+Tegelik: PDF on tühi leht
+Keskkond: Chrome 121, Windows 11"
+Discount code ignored,en,good,"Title: Discount code SAVE10 is ignored at checkout
+Preconditions: Cart contains 1 item worth 50.00 EUR, user is logged in
+Steps to reproduce:
+1. Open the cart page
+2. Enter SAVE10 in the discount field
+3. Click Apply
+Expected result: Total becomes 45.00 EUR
+Actual result: Total stays 50.00 EUR, no error is shown
+Environment: Staging, build 3.2.0, Firefox 128 on macOS 14
+Severity: Major
+Evidence: screenshot discount.png attached"
+Parooli lähtestamise e-kiri ei saabu,et,good,"Pealkiri: Parooli lähtestamise e-kiri ei saabu kasutajale
+Eeltingimused: Kasutaja mari@example.com on olemas
+Sammud:
+1. Ava sisselogimise leht
+2. Vajuta Unustasid parooli
+3. Sisesta mari@example.com ja vajuta Saada
+Oodatud tulemus: E-kiri saabub 1 minuti jooksul
+Tegelik tulemus: E-kirja ei saabu ka 30 minuti pärast
+Keskkond: Test, versioon 1.8.4, Safari 17, iOS 17
+Tõsidus: Kõrge
+Logi: serveri logi kuvab viga SMTP timeout"
+Mobile menu overlaps content,en,medium,"Mobile menu overlaps page content
+Steps:
+1. Open the site on a phone
+Actual: Menu covers the header
+Severity: Low"
